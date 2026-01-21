@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdbool.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#define SLEEP(ms) Sleep(ms)
+#else
 #include <unistd.h>
+#define SLEEP(ms) usleep((ms) * 1000)
+#endif
 
 #define WIDTH 10
 #define HEIGHT 10
@@ -12,17 +19,26 @@ typedef enum {
 
 typedef Status Grid[WIDTH][HEIGHT];
 
-void print_grid(Grid grid) {
-    for (int i = 0; i < WIDTH; i++) {
-        for (int j = 0; j < HEIGHT; j++) {
-            if (grid[i][j] == DEAD) {
-                printf("[ ]");
-            } else {
-                printf("[*]");
-            }
-        }
-        printf("\n");
-    }
+void move_cursor_home(void) {
+#ifdef _WIN32
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    COORD coord = { 0, 0 };
+    SetConsoleCursorPosition(hConsole, coord);
+#else
+    printf("\033[H");
+#endif
+}
+
+void hide_cursor(void) {
+#ifdef _WIN32
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = FALSE;
+    SetConsoleCursorInfo(hConsole, &info);
+#else
+    printf("\033[?25l");
+#endif
 }
 
 void clear_grid(Grid grid) {
@@ -33,9 +49,18 @@ void clear_grid(Grid grid) {
     }
 }
 
+void print_grid(Grid grid) {
+    for (int i = 0; i < WIDTH; i++) {
+        for (int j = 0; j < HEIGHT; j++) {
+            printf(grid[i][j] == ALIVE ? "*" : " ");
+        }
+        printf("\n");
+    }
+}
+
 bool in_bounds(int row, int col) {
-    return (row >= 0 && row < WIDTH &&
-            col >= 0 && col < HEIGHT);
+    return row >= 0 && row < WIDTH &&
+        col >= 0 && col < HEIGHT;
 }
 
 int cell_neighbor_count(Grid grid, int row, int col) {
@@ -43,9 +68,13 @@ int cell_neighbor_count(Grid grid, int row, int col) {
 
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
-            if (!(i == 0 && j == 0) &&
-                in_bounds(row + i, col + j) &&
-                grid[row + i][col + j] == ALIVE) {
+            if (i == 0 && j == 0)
+                continue;
+
+            int r = row + i;
+            int c = col + j;
+
+            if (in_bounds(r, c) && grid[r][c] == ALIVE) {
                 count++;
             }
         }
@@ -56,7 +85,6 @@ int cell_neighbor_count(Grid grid, int row, int col) {
 
 void pass_tick(Grid grid) {
     Grid next;
-
     clear_grid(next);
 
     for (int i = 0; i < WIDTH; i++) {
@@ -64,15 +92,12 @@ void pass_tick(Grid grid) {
             int neighbors = cell_neighbor_count(grid, i, j);
 
             if (grid[i][j] == ALIVE) {
-                if (neighbors == 2 || neighbors == 3) {
+                if (neighbors == 2 || neighbors == 3)
                     next[i][j] = ALIVE;
-                } else {
-                    next[i][j] = DEAD;
-                }
-            } else {
-                if (neighbors == 3) {
+            }
+            else {
+                if (neighbors == 3)
                     next[i][j] = ALIVE;
-                }
             }
         }
     }
@@ -86,6 +111,7 @@ void pass_tick(Grid grid) {
 
 int main(void) {
     Grid grid;
+    int generation = 0;
 
     clear_grid(grid);
 
@@ -95,13 +121,19 @@ int main(void) {
     grid[5][5] = ALIVE;
     grid[6][5] = ALIVE;
 
-    print_grid(grid);
-    
+    hide_cursor();
+
     while (1) {
-        pass_tick(grid);
-        printf("\033[H\033[J");
+        move_cursor_home();
+
         print_grid(grid);
-        sleep(1);
+        printf("\nGeneration: %d\n", generation);
+
+        pass_tick(grid);
+        generation++;
+
+        fflush(stdout);
+        SLEEP(100);
     }
 
     return 0;
