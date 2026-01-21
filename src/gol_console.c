@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -133,7 +134,7 @@ int main(void) {
         generation++;
 
         fflush(stdout);
-        SLEEP(100);
+        SLEEP(500);
     }
 
     return 0;
